@@ -6,15 +6,19 @@ from id_list import id_list
 class Game: pass
 class Event: pass
 class Object:
-    def __init__(self, pos: list[float], size: list[float], master: Game): pass
+    def __init__(self, pos: list[float], size:list[float], color, master: Game): pass
     def update(self, deltatime: float): pass
     def draw(self, win: pygame.surface.Surface): pass
     def listener(self, event: Event): pass
     def on_start(self): pass
-    def add_velocity(self, name, velocity): pass
-    def remove_velocity(self, name): pass
-    def add_force(self, name, force): pass
-    def remove_force(self, name): pass
+    def add_velocity(self, name: str, velocity): pass
+    def remove_velocity(self, name: str): pass
+    def add_force(self, name: str, force): pass
+    def remove_force(self, name: str): pass
+    def test_top_collide(self, rect: pygame.Rect): pass
+    def test_bottom_collide(self, rect: pygame.Rect): pass
+    def test_left_collide(self, rect: pygame.Rect): pass
+    def test_right_collide(self, rect: pygame.Rect): pass
 
 #maincode
 class Game:
@@ -65,6 +69,9 @@ class Game:
 
     def get_objects(self, distance: float = -1) -> list[Object]: pass
 
+    def get_bottom_collide(self, rect) -> list[Object]:
+        return [obj[0] for obj in self.object_list if obj[0].test_top_collide(rect)]
+
     def add_object(self, new_object: Object, runtime: float) -> Object:
         self.object_list.append([new_object, runtime])
 
@@ -112,33 +119,45 @@ class Force:
         self.direction = direction
 
 class Base_object(Object):
-    def __init__(self, pos: list[float], size:list[float], master: Game):
+    def __init__(self, pos: list[float], size:list[float], color, master: Game):
         self.rect = pygame.rect.Rect(*pos, *size)
         self.master = master
+        self.color = color
     
     def draw(self, win: pygame.Surface):
-        pygame.draw.rect(win, (50, 50, 200), self.rect)
+        pygame.draw.rect(win, self.color, self.rect)
+    
+    def test_top_collide(self, rect: pygame.Rect):
+        return rect.bottom - self.rect.top < self.rect.height and (rect.centerx >= self.rect.left and rect.centerx <= self.rect.right)
+    
+    def test_bottom_collide(self, rect: pygame.Rect):
+        return self.rect.bottom == rect.top and (rect.centerx >= self.rect.left and rect.cneterx <= self.rect.right)
 
 class Physics_object(Base_object):
-    def __init__(self, pos: list[float], size: list[float], physics: dict, master: Game):
+    def __init__(self, pos: list[float], size: list[float], color, physics: dict, master: Game):
         self.rect = pygame.rect.Rect(*pos, *size)
         self.pos = pos
         self.master = master
         self.physics = physics
+        self.color = color
         self.velocities: dict[str: Velocity] = {"gravity":Velocity(0, math.radians(90))}
         self.forces: dict[str: Force] = {}
         self.bottom = self.master.get_win()[1]
         self.can_fall = True
     
     def update(self, deltatime: float):
-        if self.pos[1] + self.rect.height < self.bottom - 10:
+        self.update_rect()
+        bottom_objects = self.master.get_bottom_collide(self.rect)
+        if len(self.master.get_bottom_collide(self.rect)) <= 0:
             self.add_force("gravity", Force(self.physics["weight"]*10, math.radians(90)))
             self.can_fall = True
 
-        elif self.pos[1] + self.rect.height >= self.bottom - 10:
+        else:
             self.remove_force("gravity")
             self.velocities["gravity"].value = 0
             self.can_fall = False
+            self.pos[1] = max(bottom_object.rect.top for bottom_object in bottom_objects)
+            self.update_rect()
 
         self.math_forces(deltatime)
         self.math_velocities(deltatime)
@@ -169,7 +188,10 @@ class Physics_object(Base_object):
             
             self.velocities[name].value += force.value * deltatime / self.physics["weight"]
 
-    def draw(self, win):
+    def update_rect(self):
         self.rect.x = int(self.pos[0])
         self.rect.y = int(self.pos[1])
-        pygame.draw.rect(win, (20, 100, 200), pygame.Rect(*self.pos, self.rect.width, self.rect.height))
+
+    def draw(self, win):
+        self.update_rect()
+        pygame.draw.rect(win, self.color, pygame.Rect(*self.pos, self.rect.width, self.rect.height))
