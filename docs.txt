@@ -1,0 +1,4 @@
+(10 px) = m
+
+velocity: m / s             S/t
+force: kg * m / s**2        m*v/t
